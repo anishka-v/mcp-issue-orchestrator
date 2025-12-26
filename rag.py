@@ -125,17 +125,17 @@ def answer_query(query: str, slack_channel: Optional[str] = None, k: int = 4) ->
     """
     Similarity search -> prompt model with retrieved chunks -> return answer.
     """
-    retrieved = vector_store.similarity_search(query, k=k)
+    retrieved = vector_store.similarity_search_with_relevance_scores(query, k=k)
 
     if not retrieved:
         return "I don’t have any indexed documents yet. Upload a file first."
 
     context_parts = []
-    for d in retrieved:
+    for d,score in retrieved:
         fname = d.metadata.get("slack_filename", "unknown")
         fid = d.metadata.get("slack_file_id", "")
         context_parts.append(f"FILE: {fname} ({fid})\n{d.page_content}")
-        print (d.metadata.get("user_id", ""), d.metadata.get("page_number", ""))
+        print ("File: ", fname, d.metadata.get("user_id", ""), d.metadata.get("page_number", ""), "score: ", score, "query: ", query)
 
     context = "\n\n---\n\n".join(context_parts)
 

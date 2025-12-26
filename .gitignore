@@ -1,0 +1,10 @@
+.env
+# OS files
+.DS_Store
+
+# Virtual environments
+.venv/
+
+chroma_db/
+
+saved_files/

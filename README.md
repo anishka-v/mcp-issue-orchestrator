@@ -18,10 +18,10 @@ export OPENAI_API_KEY=<your-openai-key>
 
 ```zsh
 # Clone this project onto your machine
-git clone https://github.com/anishka-v/rag-slackbot
+git clone https://github.com/anishka-v/mcp-issue-orchestrator
 
 # Change into this project
-cd rag-slackbot
+cd mcp-issue-orchestrator
 
 # Setup virtual environment
 python3 -m venv .venv

@@ -4,6 +4,7 @@ from typing import Optional, List
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+import docx
 from pypdf import PdfReader
 from langchain_chroma import Chroma
 
@@ -31,15 +32,6 @@ text_splitter = RecursiveCharacterTextSplitter(
 
 # --------- Helpers ---------
 
-"""def _extract_text_from_pdf(file_bytes: bytes) -> str:
-    reader = PdfReader(BytesIO(file_bytes))
-    parts = []
-    for i, page in enumerate(reader.pages):
-        t = page.extract_text() or ""
-        if t.strip():
-            parts.append(f"\n\n[PAGE {i+1}]\n{t}")
-    return "\n".join(parts).strip()"""
-
 def _extract_pages_from_pdf(file_bytes: bytes) -> List[str]:
     reader = PdfReader(BytesIO(file_bytes))
     pages = []
@@ -47,12 +39,25 @@ def _extract_pages_from_pdf(file_bytes: bytes) -> List[str]:
         pages.append((page.extract_text() or "").strip())
     return pages
 
+def _extract_text_from_docx(file_bytes: bytes) -> str:
+    """Extract paragraph text from a DOCX file."""
+    doc = docx.Document(BytesIO(file_bytes))
+    parts = []
+    for para in doc.paragraphs:
+        text = para.text.strip()
+        if text:
+            parts.append(text)
+    return "\n\n".join(parts)
+
 
 def _bytes_to_text(file_bytes: bytes, mimetype: str) -> str:
     mt = (mimetype or "").lower()
 
     if "pdf" in mt:
         return _extract_pages_from_pdf(file_bytes)
+
+    if "officedocument.wordprocessingml.document" in mt or mt.endswith("/docx"):
+        return _extract_text_from_docx(file_bytes)
 
     # default: treat as text-ish
     return file_bytes.decode("utf-8", errors="ignore").strip()
@@ -92,7 +97,7 @@ def index_slack_file_bytes(file_bytes: bytes, file_obj: dict, user_id: str, chan
                 )
             )
 
-            print (user_id, page_num)
+            #print (user_id, page_num)
     else:
         # non-PDF: treat as text-ish single doc (page_number omitted or set to 1)
         text = _bytes_to_text(file_bytes, mimetype)
@@ -125,17 +130,18 @@ def answer_query(query: str, slack_channel: Optional[str] = None, k: int = 4) ->
     """
     Similarity search -> prompt model with retrieved chunks -> return answer.
     """
-    retrieved = vector_store.similarity_search_with_relevance_scores(query, k=k)
+    retrieved = vector_store.similarity_search(query, k=k)
 
     if not retrieved:
         return "I don’t have any indexed documents yet. Upload a file first."
 
     context_parts = []
-    for d,score in retrieved:
+    for d in retrieved:
         fname = d.metadata.get("slack_filename", "unknown")
         fid = d.metadata.get("slack_file_id", "")
-        context_parts.append(f"FILE: {fname} ({fid})\n{d.page_content}")
-        print ("File: ", fname, d.metadata.get("user_id", ""), d.metadata.get("page_number", ""), "score: ", score, "query: ", query)
+        context_parts.append(
+            f"FILE: {fname} ({fid})\n{d.page_content}"
+     )
 
     context = "\n\n---\n\n".join(context_parts)
 
@@ -154,6 +160,15 @@ def answer_query(query: str, slack_channel: Optional[str] = None, k: int = 4) ->
             },
         ]
     )
+
+    # Log token usage for visibility when answering questions
+    usage = resp.usage_metadata or resp.response_metadata.get("token_usage", {})
+    if usage:
+        print(
+            "total:",
+            usage.get("total_tokens"),
+        )
+
     return resp.content
 
 def delete_all_embeddings() -> int:
@@ -176,5 +191,3 @@ def delete_all_embeddings() -> int:
     print(f"Remaining embeddings: {remaining_count}")
 
     return vector_store._collection.count()
-
-

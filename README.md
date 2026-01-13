@@ -1,4 +1,4 @@
-# Getting Started ⚡️ Bolt for Python
+# Getting Started 
 
 ## Overview
 
